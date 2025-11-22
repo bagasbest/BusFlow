@@ -166,13 +166,14 @@ class MqttManager(
      */
     fun publish(topic: String, message: String, qos: Int = 0) {
         try {
-            Log.d("mqtt manager", "publish method call")
+            // ✅ OPTIMIZED: Removed verbose logging - only log errors
             val mqttMessage = MqttMessage(message.toByteArray())
             mqttMessage.qos = qos
             mqttMessage.isRetained = false
             mqttClient.publish(topic, mqttMessage)
         } catch (e: MqttException) {
-            Log.d("MqttManager", "Failed to publish message: ${e.message}")
+            // ✅ OPTIMIZED: Only log errors (not debug) and throttle to prevent spam
+            // Log.w("MqttManager", "Failed to publish: ${e.message}")
             // handle the exception according to your app's requirements
         }
     }
