@@ -1982,16 +1982,11 @@ class MapActivity : AppCompatActivity() {
                             val secs = totalSeconds % 60
                             "Next run in: $mins mins $secs seconds"
                         } else {
-                            // ✅ FIX: Format late time as "xx mins yy seconds" if >= 60 seconds
+                            // ✅ FIX: Format late time as "xx mins" only (no seconds) if >= 60 seconds
                             val lateSeconds = (-diff / 1000).toInt()
                             if (lateSeconds >= 60) {
                                 val mins = lateSeconds / 60
-                                val secs = lateSeconds % 60
-                                if (secs > 0) {
-                                    "You are late for the next run by $mins mins $secs seconds"
-                                } else {
-                                    "You are late for the next run by $mins mins"
-                                }
+                                "You are late for the next run by $mins mins"
                             } else {
                                 "You are late for the next run by ${lateSeconds}s"
                             }
