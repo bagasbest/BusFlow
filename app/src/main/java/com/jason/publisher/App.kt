@@ -37,7 +37,7 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
             val isBuiltinEnabled = prefs.getBoolean("enable_builtin_recording", false)
             if (isBuiltinEnabled) {
                 Log.d("App", "No activities alive, stopping screen recording service")
-                ScreenRecordService.stop(applicationContext)
+            ScreenRecordService.stop(applicationContext)
             }
         }
     }

@@ -10,6 +10,7 @@ import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.utils.FileLogger
+import com.jason.publisher.main.utils.LifecycleLogger
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -251,16 +252,16 @@ class ScheduleStatusManager(
             // Update UI directly (already on main thread from MapActivity)
             try {
                 // Always use runOnUiThread to ensure we're on the main thread
-                activity.runOnUiThread {
+            activity.runOnUiThread {
                     try {
-                        binding.scheduleStatusValueTextView.text = statusText
-                        binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, colorRes))
+                binding.scheduleStatusValueTextView.text = statusText
+                binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, colorRes))
                         
                         // Try to find icon using findViewById
                         val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                         if (iconView != null) {
                             iconView.setImageResource(symbolRes)
-                        } else {
+            } else {
                             // Fallback: try to access via binding if available
                             try {
                                 val bindingIcon = binding.root.findViewById<ImageView>(R.id.scheduleAheadIcon)
@@ -281,9 +282,31 @@ class ScheduleStatusManager(
                 e.printStackTrace()
             }
 
-            // ✅ OPTIMIZED: Simplified logging - only log essential status info
-            // Detailed debug info removed to reduce log spam
-            // Status changes are tracked via LifecycleLogger in MapActivity
+            // ✅ ENHANCED: Store ETA calculation data for logging
+            activity.latestETAData = mapOf(
+                "d1" to d1,
+                "d2" to d2,
+                "t1" to t1,
+                "t2" to t2,
+                "effectiveSpeed" to effectiveSpeed,
+                "scheduleStatusText" to statusText,
+                "timingPointTime" to scheduledTimeStr,
+                "predictedArrival" to predictedArrivalStr,
+                "deltaSec" to deltaSec
+            )
+            
+            // ✅ ENHANCED: Log detailed schedule status every 5 seconds
+            LifecycleLogger.logScheduleStatus(
+                d1 = d1,
+                d2 = d2,
+                t1 = t1,
+                t2 = t2,
+                effectiveSpeed = effectiveSpeed,
+                predictedArrival = predictedArrivalStr,
+                deltaSec = deltaSec,
+                scheduleStatusText = statusText,
+                timingPointTime = scheduledTimeStr
+            )
 
             overrideLateStatusForNextSchedule()
         } catch (e: Exception) {
@@ -389,10 +412,10 @@ class ScheduleStatusManager(
             
             activity.runOnUiThread {
                 try {
-                    binding.scheduleStatusValueTextView.text = overrideStatusText
-                    binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity,
-                        R.color.blind_red
-                    ))
+                binding.scheduleStatusValueTextView.text = overrideStatusText
+                binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity,
+                    R.color.blind_red
+                ))
                     val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                     if (iconView != null) {
                         iconView.setImageResource(R.drawable.ic_schedule_late)

@@ -171,10 +171,10 @@ class ScreenRecordService : Service() {
             }
 
             try {
-                r.setVideoSource(MediaRecorder.VideoSource.SURFACE)
-                r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                r.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-                if (audioEnabled) r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setVideoSource(MediaRecorder.VideoSource.SURFACE)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+            if (audioEnabled) r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
 
                 // Optimize: Reduce bitrate from 8 Mbps to 2 Mbps (75% reduction)
                 // This significantly reduces CPU/GPU load and file size while maintaining good quality
@@ -182,20 +182,20 @@ class ScreenRecordService : Service() {
                 // Optimize: Reduce frame rate from 30 fps to 15 fps (50% reduction)
                 // This reduces encoding load while still providing smooth playback
                 r.setVideoFrameRate(15)
-                r.setVideoSize(width, height)
+            r.setVideoSize(width, height)
 
-                if (audioEnabled) {
+            if (audioEnabled) {
                     // Optimize: Reduce audio bitrate from 128 kbps to 64 kbps
                     // This reduces audio encoding load while maintaining acceptable quality
                     r.setAudioEncodingBitRate(64_000)
                     // Optimize: Reduce sample rate from 44.1 kHz to 22.05 kHz
                     // This reduces audio processing load
                     r.setAudioSamplingRate(22050)
-                }
+            }
 
-                r.setOutputFile(outputFd)
-                r.prepare()
-                return r to audioEnabled
+            r.setOutputFile(outputFd)
+            r.prepare()
+            return r to audioEnabled
             } catch (e: Exception) {
                 // Clean up on error
                 runCatching { r.reset(); r.release() }
@@ -224,7 +224,7 @@ class ScreenRecordService : Service() {
 
         // Start recording with error handling
         try {
-            rec.start()
+        rec.start()
             Log.d("SRService", "Recording started successfully (${width}x${height} @ ${15}fps, ${2_000_000/1_000_000}Mbps)")
         } catch (e: Exception) {
             Log.e("SRService", "Failed to start recording: ${e.message}", e)
@@ -343,8 +343,8 @@ class ScreenRecordService : Service() {
     @RequiresApi(Build.VERSION_CODES.N)
     private fun updateOngoingNotification() {
         try {
-            val elapsedSec = ((SystemClock.elapsedRealtime() - startedElapsedMs) / 1000L).coerceAtLeast(0)
-            nm.notify(NOTIF_ID, buildNotification(elapsedSec))
+        val elapsedSec = ((SystemClock.elapsedRealtime() - startedElapsedMs) / 1000L).coerceAtLeast(0)
+        nm.notify(NOTIF_ID, buildNotification(elapsedSec))
         } catch (e: Exception) {
             Log.w("SRService", "Failed to update notification: ${e.message}")
             // If notification fails, stop the ticker to prevent repeated failures
@@ -358,23 +358,23 @@ class ScreenRecordService : Service() {
         val mm = elapsedSec / 60
         val ss = elapsedSec % 60
         val timeTxt = String.format(Locale.US, "%02d:%02d", mm, ss)
-        
+
         // Optimize: Cache PendingIntents to avoid recreating them on every update
         // This reduces object allocation and improves performance
         if (cachedOpenPi == null) {
             cachedOpenPi = PendingIntent.getActivity(
-                this, 0,
-                packageManager.getLaunchIntentForPackage(packageName),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
+            this, 0,
+            packageManager.getLaunchIntentForPackage(packageName),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         }
-        
+
         if (cachedStopPi == null) {
             cachedStopPi = PendingIntent.getService(
-                this, 1,
-                Intent(this, ScreenRecordService::class.java).apply { action = ACTION_STOP },
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
+            this, 1,
+            Intent(this, ScreenRecordService::class.java).apply { action = ACTION_STOP },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         }
 
         return NotificationCompat.Builder(this, CH_ID)

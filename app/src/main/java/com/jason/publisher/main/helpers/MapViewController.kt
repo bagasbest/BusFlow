@@ -79,20 +79,34 @@ class MapViewController(
             @SuppressLint("LongLogTag")
             override fun run() {
                 try {
-                    val now = System.currentTimeMillis()
+                val now = System.currentTimeMillis()
                     var removedCount = 0
 
                     // 1) remove any buses inactive ≥30s (increased from 10s to prevent premature removal)
-                    activity.markerBus.keys
-                        .filter { it != activity.token }
-                        .forEach { t ->
-                            val last = activity.lastSeen[t] ?: 0L
+                activity.markerBus.keys
+                    .filter { it != activity.token }
+                    .forEach { t ->
+                        val last = activity.lastSeen[t] ?: 0L
                             if (last != 0L && now - last >= 30_000L) {
-                                activity.markerBus[t]?.let { marker ->
-                                    binding.map.layerManager.layers.remove(marker)
+                                // ✅ ENHANCED: Log bus removal with destination info
+                                val label = activity.otherBusLabels[t] ?: "Unknown"
+                                val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
+                                val marker = activity.markerBus[t]
+                                val lat = marker?.latLong?.latitude
+                                val lon = marker?.latLong?.longitude
+                                
+                                com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
+                                    token = t,
+                                    label = label,
+                                    destination = destination,
+                                    reason = "timeout"
+                                )
+                                
+                                marker?.let {
+                                    binding.map.layerManager.layers.remove(it)
                                 }
-                                activity.markerBus.remove(t)
-                                activity.prevCoords.remove(t)
+                            activity.markerBus.remove(t)
+                            activity.prevCoords.remove(t)
                                 activity.lastSeen.remove(t)
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
@@ -104,8 +118,8 @@ class MapViewController(
                         Log.d("MapViewController", "Removed $removedCount inactive bus marker(s)")
                     }
 
-                    // 2) refresh the map
-                    binding.map.invalidate()
+                // 2) refresh the map
+                binding.map.invalidate()
 
                     // 3) schedule next check in 1s only if handler is still valid
                     activityMonitorHandler?.postDelayed(this, 1_000L)
@@ -226,17 +240,17 @@ class MapViewController(
                     
                     // Add the new layer at index 0 (bottom layer, so map tiles render first)
                     binding.map.layerManager.layers.add(0, layer)
-                    
-                    binding.map.post {
+
+                binding.map.post {
                         try {
-                            binding.map.model.mapViewPosition.setZoomLevel(15)
-                            binding.map.model.mapViewPosition.setCenter(
-                                LatLong(activity.latitude, activity.longitude)
-                            )
-                            drawDetectionZones(activity.stops)
-                            drawPolyline()
-                            addBusStopMarkers(activity.stops)
-                            addBusMarker(activity.latitude, activity.longitude)
+                    binding.map.model.mapViewPosition.setZoomLevel(15)
+                    binding.map.model.mapViewPosition.setCenter(
+                        LatLong(activity.latitude, activity.longitude)
+                    )
+                    drawDetectionZones(activity.stops)
+                    drawPolyline()
+                    addBusStopMarkers(activity.stops)
+                    addBusMarker(activity.latitude, activity.longitude)
                             
                             // ✅ CRITICAL: Force map to render by invalidating
                             binding.map.invalidate()
@@ -376,7 +390,7 @@ class MapViewController(
 
     private var animationHandler: Handler? = null
     private var animationRunnable: Runnable? = null
-    
+
     /**
      * Smoothly animate the marker's movement instead of jumping suddenly.
      */
@@ -393,8 +407,8 @@ class MapViewController(
         animationRunnable = object : Runnable {
             override fun run() {
                 try {
-                    if (step < total) {
-                        val p = pts[step]
+                if (step < total) {
+                    val p = pts[step]
                         // Update marker directly without triggering full update cycle
                         val newPos = LatLong(p.latitude!!, p.longitude!!)
                         activity.busMarker?.let { marker ->
@@ -402,7 +416,7 @@ class MapViewController(
                             binding.map.setCenter(newPos)
                             binding.map.invalidate()
                         }
-                        step++
+                    step++
                         animationHandler?.postDelayed(this, 100) // Faster animation (100ms instead of 500ms)
                     } else {
                         // Animation complete, ensure final position is set
@@ -479,13 +493,13 @@ class MapViewController(
                 lastMarkerUpdateTime = currentTime
                 
                 // 1) publish telemetry & client-attrs (throttled internally to avoid excessive calls)
-                mqttHelper.publishTelemetryData()
-                activity.updateClientAttributes()
+        mqttHelper.publishTelemetryData()
+        activity.updateClientAttributes()
             }
 
             // 2) build a rotated icon for *this* bus (always update for smooth rotation)
-            val newPos  = LatLong(lat, lon)
-            val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
+        val newPos  = LatLong(lat, lon)
+        val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
 
             // 3) ✅ CRITICAL: Always update marker position (even if position hasn't changed much)
             // This ensures marker and map are always rendered correctly
@@ -494,17 +508,17 @@ class MapViewController(
                 activity.busMarker!!.bitmap = rotated
             } else {
                 // 4) Create new marker if it doesn't exist
-                activity.busMarker = Marker(newPos, rotated, 0, 0)
-                binding.map.layerManager.layers.add(activity.busMarker)
+        activity.busMarker = Marker(newPos, rotated, 0, 0)
+        binding.map.layerManager.layers.add(activity.busMarker)
             }
 
             // 5) spin the *map* so that this bus's bearing is "up"
-            binding.map.rotation = -bearing
+        binding.map.rotation = -bearing
 
             // 6) optional: zoom, scale, center (always update to ensure map is visible)
-            binding.map.scaleX = 1.9f
-            binding.map.scaleY = 1.9f
-            binding.map.setCenter(newPos)
+        binding.map.scaleX = 1.9f
+        binding.map.scaleY = 1.9f
+        binding.map.setCenter(newPos)
 
             // ✅ FIX: Ensure map layer exists before invalidating
             // If map layer is missing, try to reload it
@@ -522,10 +536,10 @@ class MapViewController(
             
             // 7) ✅ CRITICAL: Always invalidate map to prevent white screen
             // This ensures map is always rendered, even if position hasn't changed
-            binding.map.invalidate()
+        binding.map.invalidate()
             
             if (shouldDoFullUpdate) {
-                activity.onBusMarkerUpdated()
+        activity.onBusMarkerUpdated()
             }
         } catch (e: Exception) {
             Log.e("MapViewController", "Error updating bus marker: ${e.message}", e)

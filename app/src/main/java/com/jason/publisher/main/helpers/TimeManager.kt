@@ -42,16 +42,16 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
         currentTimeRunnable = object : Runnable {
             override fun run() {
                 try {
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    owner.currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                    Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${owner.currentTimeTextView.text}")
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                owner.currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${owner.currentTimeTextView.text}")
 
-                    // Advance time by 1 second per tick
-                    simulatedStartTime.add(Calendar.SECOND, 1)
+                // Advance time by 1 second per tick
+                simulatedStartTime.add(Calendar.SECOND, 1)
 
-                    // Update schedule status based on the new simulated time
-                    owner.scheduleStatusValueTextView.text = "Calculating..."
-                    scheduleStatusManager.checkScheduleStatus()
+                // Update schedule status based on the new simulated time
+                owner.scheduleStatusValueTextView.text = "Calculating..."
+                scheduleStatusManager.checkScheduleStatus()
 
                     // Schedule next update only if handler is still valid
                     currentTimeHandler?.postDelayed(this, 1000) // Update every second
@@ -94,11 +94,11 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
             @SuppressLint("LongLogTag")
             override fun run() {
                 try {
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    owner.currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                owner.currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
                     // ✅ OPTIMIZED: Removed verbose logging - time updates every second
 
-                    simulatedStartTime.add(Calendar.SECOND, 1)
+                simulatedStartTime.add(Calendar.SECOND, 1)
                     // Schedule next update only if handler is still valid
                     currentTimeHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
@@ -124,31 +124,31 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
         nextTripRunnable = object : Runnable {
             override fun run() {
                 try {
-                    val currentTime = simulatedStartTime.clone() as Calendar
-                    val nextTripStartTime = getNextScheduleStartTime()
+                val currentTime = simulatedStartTime.clone() as Calendar
+                val nextTripStartTime = getNextScheduleStartTime()
 
-                    if (nextTripStartTime != null) {
-                        val timeParts = nextTripStartTime.split(":").map { it.toInt() }
-                        val nextTripCalendar = Calendar.getInstance().apply {
-                            set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
-                            set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
-                            set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
-                            set(Calendar.HOUR_OF_DAY, timeParts[0])
-                            set(Calendar.MINUTE, timeParts[1])
-                            set(Calendar.SECOND, 0)
-                            if (timeInMillis <= currentTime.timeInMillis) add(Calendar.DATE, 1)
-                        }
-                        val diff = nextTripCalendar.timeInMillis - currentTime.timeInMillis
-                        if (diff > 0) {
-                            val mins = (diff / 1000 / 60).toInt()
-                            val secs = ((diff / 1000) % 60).toInt()
-                            owner.nextTripCountdownTextView.text = "Next run in: $mins mins $secs seconds"
-                        } else {
-                            owner.nextTripCountdownTextView.text = "You are late for the next run"
-                        }
-                    } else {
-                        owner.nextTripCountdownTextView.text = "No more scheduled trips for today"
+                if (nextTripStartTime != null) {
+                    val timeParts = nextTripStartTime.split(":").map { it.toInt() }
+                    val nextTripCalendar = Calendar.getInstance().apply {
+                        set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
+                        set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
+                        set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
+                        set(Calendar.HOUR_OF_DAY, timeParts[0])
+                        set(Calendar.MINUTE, timeParts[1])
+                        set(Calendar.SECOND, 0)
+                        if (timeInMillis <= currentTime.timeInMillis) add(Calendar.DATE, 1)
                     }
+                    val diff = nextTripCalendar.timeInMillis - currentTime.timeInMillis
+                    if (diff > 0) {
+                        val mins = (diff / 1000 / 60).toInt()
+                        val secs = ((diff / 1000) % 60).toInt()
+                        owner.nextTripCountdownTextView.text = "Next run in: $mins mins $secs seconds"
+                    } else {
+                        owner.nextTripCountdownTextView.text = "You are late for the next run"
+                    }
+                } else {
+                    owner.nextTripCountdownTextView.text = "No more scheduled trips for today"
+                }
                     // Schedule next update only if handler is still valid
                     nextTripHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
@@ -169,18 +169,29 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
 
     /**
      * function to update the currentTimeTextView
+     * ✅ FIX: Also update simulatedStartTime to keep it in sync with real tablet time
      */
     fun startCurrentTimeUpdater() {
         // Stop any existing timer first
         stopCurrentTime()
         
+        // ✅ FIX: Sync simulatedStartTime with current tablet time at initialization
+        val now = Date()
+        simulatedStartTime.time = now
+        
         currentTimeHandler = Handler(Looper.getMainLooper())
         currentTimeRunnable = object : Runnable {
             override fun run() {
                 try {
+                    val now = Date()
                     val currentTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    val nowStr = currentTimeFormat.format(Date())
+                    val nowStr = currentTimeFormat.format(now)
                     owner.currentTimeTextView.text = nowStr
+                    
+                    // ✅ FIX: Update simulatedStartTime to keep it in sync with real time
+                    // This ensures calculations use the same time as displayed in UI
+                    simulatedStartTime.time = now
+                    
                     // Schedule next update only if handler is still valid
                     currentTimeHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
