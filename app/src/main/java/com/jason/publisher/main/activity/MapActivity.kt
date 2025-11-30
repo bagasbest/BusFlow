@@ -369,8 +369,9 @@ class MapActivity : AppCompatActivity() {
         // Initialize UI components
         initializeUIComponents()
 
-        // ✅ FIX: Start the current time counter using tablet time instead of schedule start time
-        timeManager.startCurrentTimeUpdater()
+        // Start the current time counter
+        // Use startStartTime() which updates simulatedStartTime for calculations
+        timeManager.startStartTime()
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater()
