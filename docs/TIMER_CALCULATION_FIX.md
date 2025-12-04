@@ -123,3 +123,4 @@ fun startCurrentTimeUpdater() {
 - `ScheduleStatusManager.kt` - Menggunakan `simulatedStartTime` (akan otomatis benar)
 - `MapActivity.kt` - Menggunakan `simulatedStartTime` (akan otomatis benar)
 
+
