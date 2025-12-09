@@ -536,13 +536,13 @@ class ScheduleActivity : AppCompatActivity() {
         // ✅ FIX: Check if there's an active trip - don't remove from cache if trip is unfinished
         val hasActiveTrip = TripLog.hasActive(this)
         if (!hasActiveTrip) {
-            // remove first item, persist, refresh (your existing code) ...
-            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-            isScheduleCacheUpdated = false
-            saveScheduleDataToCache()
-            updateScheduleTablePaged()
-            updateTimeline()
-            rewriteOfflineScheduleData()
+        // remove first item, persist, refresh (your existing code) ...
+        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+        isScheduleCacheUpdated = false
+        saveScheduleDataToCache()
+        updateScheduleTablePaged()
+        updateTimeline()
+        rewriteOfflineScheduleData()
         } else {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
         }
@@ -638,11 +638,11 @@ class ScheduleActivity : AppCompatActivity() {
             return
         }
         
-        // Store the first schedule item for the Map
-        val firstScheduleItem = scheduleData.first()
-        val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
-        Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
-        Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
+            // Store the first schedule item for the Map
+            val firstScheduleItem = scheduleData.first()
+            val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
+            Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
+            Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
         // ✅ FIX: Check if there's an active trip - don't remove from cache if trip is unfinished
         val hasActiveTrip = TripLog.hasActive(this)
@@ -655,34 +655,34 @@ class ScheduleActivity : AppCompatActivity() {
             scheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        // We will still pass the full list (for future trips), AND pass the selected one explicitly.
-        val intent = Intent(this, MapActivity::class.java).apply {
-            // timeline labels (unchanged)
-            val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
+            // We will still pass the full list (for future trips), AND pass the selected one explicitly.
+            val intent = Intent(this, MapActivity::class.java).apply {
+                // timeline labels (unchanged)
+                val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
             val labels = scheduleDataToPass.map { item ->
-                val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
-                val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
-                "${item.startTime} ${saferunName(item)} $from → $to"
-            }
-            putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+                    val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
+                    val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
+                    "${item.startTime} ${saferunName(item)} $from → $to"
+                }
+                putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
-            // essentials
-            putExtra("AID", aid)
-            putExtra("CONFIG", ArrayList(config))
-            putExtra("JSON_STRING", jsonString)
+                // essentials
+                putExtra("AID", aid)
+                putExtra("CONFIG", ArrayList(config))
+                putExtra("JSON_STRING", jsonString)
 
-            // keep sending the *full* sets as before
-            putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                // keep sending the *full* sets as before
+                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
 
-            // NEW: tell MapActivity which one to use for THIS trip
-            putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
-            selectedIdx?.let { idx ->
-                putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
-            }
-            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+                // NEW: tell MapActivity which one to use for THIS trip
+                putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
+                selectedIdx?.let { idx ->
+                    putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
+                }
+                putExtra("EXTRA_PANEL_DEBUG_NO", no)
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
-        }
+            }
 
         if (!hasActiveTrip) {
             // Update scheduleData and persist only if no active trip
@@ -694,7 +694,7 @@ class ScheduleActivity : AppCompatActivity() {
             rewriteOfflineScheduleData()
         }
 
-        startActivity(intent)
+            startActivity(intent)
     }
 
     /** Map "1" or "Route 1" → 0-based index into busRouteData */
