@@ -174,6 +174,36 @@ class MapViewController(
                             }
                         }
 
+                    // ✅ FIX: Remove duplicate labels - keep only the first token for each unique label
+                    // This prevents multiple buses with the same label from appearing in the detail panel
+                    val labelToTokenMap = mutableMapOf<String, String>()
+                    val tokensToRemove = mutableListOf<String>()
+                    
+                    activity.otherBusLabels.forEach { (token, label) ->
+                        if (token != activity.token && !label.isNullOrBlank()) {
+                            if (label in labelToTokenMap) {
+                                // Duplicate label found - remove this token, keep the first one
+                                tokensToRemove.add(token)
+                                Log.d("MapViewController activityMonitor", 
+                                    "⚠️ Removing duplicate label '$label' for token $token (keeping ${labelToTokenMap[label]})")
+                            } else {
+                                labelToTokenMap[label] = token
+                            }
+                        }
+                    }
+                    
+                    // Remove duplicate entries
+                    tokensToRemove.forEach { token ->
+                        activity.markerBus[token]?.let {
+                            binding.map.layerManager.layers.remove(it)
+                        }
+                        activity.markerBus.remove(token)
+                        activity.prevCoords.remove(token)
+                        activity.lastSeen.remove(token)
+                        activity.otherBusLabels.remove(token)
+                        removedCount++
+                    }
+                    
                     // ✅ OPTIMIZED: Only log when buses are removed or count changes significantly
                     if (removedCount > 0) {
                         Log.d("MapViewController", "Removed $removedCount inactive bus marker(s)")
@@ -741,22 +771,46 @@ class MapViewController(
                 .keys
                 .toList()
 
+            // ✅ FIX: Get self bus label to filter out other buses with same label
+            val selfLabel = activeSegment?.takeIf { !it.isNullOrBlank() }
+            Log.d("MapViewController refreshDetailPanelIcons", 
+                "Self label: $selfLabel, otherBusLabels count: ${activity.otherBusLabels.size}, " +
+                "otherBusLabels: ${activity.otherBusLabels.map { (k, v) -> "$k=$v" }.joinToString(", ")}")
+            
             // ✅ FIX: allActiveOthers - ALL buses that have started (for detail panel), not just visible ones
             // Detail panel should show all active buses based on otherBusLabels
             // Only show buses that have a valid label (have started a trip)
             // ✅ FIX: In offline mode, don't show other buses - they can't be tracked
             val allActiveOthers = if (isReallyOnline()) {
-                activity.otherBusLabels
+                // ✅ FIX: Filter and distinct by label to prevent duplicate entries with same label
+                // Also exclude other buses that have the same label as self bus
+                val filteredBuses = activity.otherBusLabels
                     .filter { (t, label) -> 
                         t != selfToken &&
                         t in validBusTokens &&
                         // ✅ FIX: Only show buses that have a valid label (have started a trip)
-                        !label.isNullOrBlank()
-                        // ✅ FIX: Don't filter Break schedules - bus on break should still be shown in detail panel
-                        // Break buses are tracked but marker is not shown on map
+                        !label.isNullOrBlank() &&
+                        // ✅ FIX: Exclude other buses with same label as self bus to prevent duplicates
+                        label != selfLabel
                     }
-                    .keys
+                
+                // Group by label and take only the first token for each unique label
+                val labelToTokenMap = filteredBuses
+                    .entries
+                    .groupBy { it.value } // Group by label
+                    .mapValues { (_, entries) -> entries.first().key } // Take first token for each label
+                    .values
                     .toList()
+                
+                // Log if duplicates were found
+                val originalCount = filteredBuses.size
+                if (originalCount > labelToTokenMap.size) {
+                    Log.w("MapViewController refreshDetailPanelIcons", 
+                        "⚠️ Removed ${originalCount - labelToTokenMap.size} duplicate bus(es) with same label. " +
+                        "Original: $originalCount, After distinct: ${labelToTokenMap.size}")
+                }
+                
+                labelToTokenMap
             } else {
                 // ✅ FIX: In offline mode, return empty list - no other buses can be tracked
                 emptyList()
@@ -783,10 +837,30 @@ class MapViewController(
                 Log.w("MapViewController refreshDetailPanelIcons", "⚠️ WARNING: Found duplicate tokens in displayOrder! Raw: $displayOrderRaw, Distinct: $displayOrderDistinct")
             }
 
-            // ✅ FIX: Show all active buses in detail panel, even if they have the same label
-            // Detail panel should display all buses that have started, not filter by label
-            val displayOrder = displayOrderDistinct
+            // ✅ FIX: Distinct by label to ensure no duplicate labels are shown
+            // Track labels we've already displayed to prevent duplicates
+            val displayedLabels = mutableSetOf<String>()
+            val displayOrder = displayOrderDistinct.filter { token ->
+                val label = if (token == selfToken) {
+                    selfLabel ?: return@filter false
+                } else {
+                    activity.otherBusLabels[token] ?: return@filter false
+                }
+                
+                // Skip if we've already displayed this label
+                if (label in displayedLabels) {
+                    Log.d("MapViewController refreshDetailPanelIcons", 
+                        "⚠️ Skipping duplicate label: $label for token: $token")
+                    return@filter false
+                }
+                
+                displayedLabels.add(label)
+                true
+            }
 
+            // ✅ FIX: Track labels during rendering to prevent any duplicates that might slip through
+            val renderedLabels = mutableSetOf<String>()
+            
             displayOrder.forEachIndexed { idx, token ->
                 // If we're in deep zoom or there are no others, skip any non-self rows
                 if (idx >= 1 && (zoom > 25.0 || allActiveOthers.isEmpty())) {
@@ -812,6 +886,14 @@ class MapViewController(
                     // ✅ FIX: Show other buses even if on Break - they're still active and should be tracked
                     lbl
                 }
+                
+                // ✅ FIX: Skip if this label was already rendered (double-check to prevent duplicates)
+                if (label in renderedLabels) {
+                    Log.d("MapViewController refreshDetailPanelIcons", 
+                        "⚠️ Skipping duplicate label during render: $label for token: $token")
+                    return@forEachIndexed
+                }
+                renderedLabels.add(label)
 
                 val row = LinearLayout(activity).apply {
                     orientation = LinearLayout.HORIZONTAL

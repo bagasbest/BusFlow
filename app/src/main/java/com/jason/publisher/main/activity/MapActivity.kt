@@ -247,6 +247,8 @@ class MapActivity : AppCompatActivity() {
         FileLogger.d("MapActivity", "onCreate")
         // ✅ FIX: Reset final stop message flag for new trip
         hasShownFinalStopMessage = false
+        // ✅ FIX: Reset trip log started flag for new trip
+        tripLogStarted = false
         hookBatteryToasts()
 
         autoTapArrivalDone = savedInstanceState?.getBoolean("autoTapArrivalDone") ?: false
@@ -256,6 +258,15 @@ class MapActivity : AppCompatActivity() {
         // Add logger
         FileLogger.init(this)
         FileLogger.markAppOpened("MapActivity")
+        
+        // ✅ FIX: Clear other bus tracking data when starting a new trip
+        // This prevents stale bus data from previous trips from appearing in the detail panel
+        otherBusLabels.clear()
+        markerBus.clear()
+        prevCoords.clear()
+        lastSeen.clear()
+        Log.d("MapActivity", "✅ Cleared other bus tracking data for new trip")
+        FileLogger.d("MapActivity", "✅ Cleared otherBusLabels (${otherBusLabels.size}), markerBus (${markerBus.size}), prevCoords (${prevCoords.size}), lastSeen (${lastSeen.size})")
 
         // Initialize managers before using them
         initializeManagers()
@@ -648,6 +659,17 @@ class MapActivity : AppCompatActivity() {
                 .setPositiveButton("Confirm") { _, _ ->
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
+                        // ✅ FIX: Clear currentTripLabel in ThingsBoard when ending trip
+                        // This prevents other buses from seeing stale trip labels
+                        publishActiveSegment("")
+                        Log.d("MapActivity", "✅ Cleared currentTripLabel when ending trip")
+                        
+                        // Log trip end
+                        TripLog.end(this, "UserEndedTrip", mapOf(
+                            "routeName" to (scheduleList.firstOrNull()?.runName ?: "Unknown"),
+                            "stopsCount" to stops.size
+                        ))
+                        
                         val intent = Intent(this, ScheduleActivity::class.java)
                         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
                         startActivity(intent)
@@ -1101,6 +1123,16 @@ class MapActivity : AppCompatActivity() {
             .setMessage(messageText)
             .setPositiveButton("View Next Trip") { dialog, _ ->
                 dialog.dismiss()
+                // ✅ FIX: Clear currentTripLabel in ThingsBoard when trip completes naturally
+                publishActiveSegment("")
+                Log.d("MapActivity", "✅ Cleared currentTripLabel when trip completed")
+                
+                // Log trip end
+                TripLog.end(this, "TripCompleted", mapOf(
+                    "routeName" to (scheduleList.firstOrNull()?.runName ?: "Unknown"),
+                    "stopsCount" to stops.size
+                ))
+                
                 startActivity(Intent(this, ScheduleActivity::class.java))
             }
             .create()
