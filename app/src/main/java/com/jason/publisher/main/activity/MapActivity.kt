@@ -73,7 +73,9 @@ import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.LastLocationStore
+import com.jason.publisher.main.utils.LifecycleLogger
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
+import com.jason.publisher.main.utils.TimeFormatHelper
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts
 import com.jason.publisher.services.ApiService
@@ -190,6 +192,7 @@ class MapActivity : AppCompatActivity() {
     lateinit var timeManager: TimeManager
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
+    private lateinit var lifecycleLogger: LifecycleLogger
     val otherBusLabels = mutableMapOf<String,String>()
     val connectivityManager by lazy(LazyThreadSafetyMode.NONE) {
         getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -236,6 +239,9 @@ class MapActivity : AppCompatActivity() {
 
         // Initialize managers before using them
         initializeManagers()
+        
+        // Initialize lifecycle logger
+        lifecycleLogger = LifecycleLogger(this)
 
         // before creating the helper, set up the config‐fetching client:
         mqttManagerConfig = MqttManager(
@@ -269,26 +275,13 @@ class MapActivity : AppCompatActivity() {
         val timelineLabels = intent.getStringArrayListExtra("TIMELINE_LABELS") ?: emptyList<String>()
         panelDebugNo = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", 0)
 
-        Log.d("MapActivity onCreate retrieve", "Received aid: $aid")
-        Log.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
-        Log.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
-        Log.d("MapActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
-
-        FileLogger.d("MapActivity onCreate retrieve", "Received aid: $aid")
-        FileLogger.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
-        FileLogger.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        // Log hanya summary data penting
+        val routeInfo = "Route: ${route.size} points, Stops: ${stops.size}, Schedules: ${scheduleList.size}"
+        lifecycleLogger.logLifecycleEvent(
+            event = "onCreate",
+            routeInfo = routeInfo
+        )
+        FileLogger.d("MapActivity onCreate", "AID: $aid, Route points: ${route.size}, Stops: ${stops.size}, Schedules: ${scheduleList.size}")
 
         val selfLabel = scheduleList.firstOrNull()?.let { formatPanelLabel(it) }
         mapController.activeSegment = selfLabel // let the controller draw using this exact text
@@ -488,8 +481,7 @@ class MapActivity : AppCompatActivity() {
             override fun onLocationUpdate(location: Location) {
                 latitude = location.latitude
                 longitude = location.longitude
-                Log.d("MapActivity onCreate Latitude", latitude.toString())
-                Log.d("MapActivity onCreate Longitude", longitude.toString())
+                // Tidak perlu log verbose setiap location update
             }
         })
 
@@ -1138,10 +1130,16 @@ class MapActivity : AppCompatActivity() {
                 runOnUiThread {
                     ApiTimeValueTextView.text = updatedFinalApiTime
                 }
-                Log.d("MapActivity updateApiTime", "⏩ Updated API time after last timing point to: $updatedFinalApiTime")
+                // Hanya log saat API time locked dengan throttling
+                if (lifecycleLogger.shouldLogApiTime()) {
+                    FileLogger.d("MapActivity updateApiTime", "⏩ Updated API time after last timing point to: $updatedFinalApiTime")
+                }
             } else {
                 runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
-                Log.d("MapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+                // Hanya log saat API time locked dengan throttling
+                if (lifecycleLogger.shouldLogApiTime()) {
+                    FileLogger.d("MapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+                }
             }
             return
         }
@@ -1161,31 +1159,27 @@ class MapActivity : AppCompatActivity() {
         // Build timing list.
         val baseRoute = selectedRouteData ?: busRouteData.firstOrNull()
         val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
-        Log.d("MapActivity updateApiTime", "Timing list: $timingList")
 
         val upcomingAddress = stopAddress
         if (upcomingAddress.isBlank() || upcomingAddress == "Unknown") {
-            Log.d("MapActivity updateApiTime", "No upcoming address yet; skipping.")
+            // Tidak perlu log verbose
             return
         }
-        Log.d("MapActivity updateApiTime", "Upcoming stop address: $upcomingAddress")
 
         // Find the target index.
         val targetIndex = timingList.indexOfFirst { it.address?.equals(upcomingAddress, true) == true }
         if (targetIndex == -1) {
-            Log.e("...","Upcoming stop address not found in timing list.")
+            // Hanya log error
+            Log.e("MapActivity updateApiTime", "Upcoming stop address not found in timing list: $upcomingAddress")
             return
         }
-        Log.d("MapActivity updateApiTime", "Found target index: $targetIndex")
 
         // Compute the total duration.
         val totalDurationMinutes = calculateDurationForUpdate(timingList, scheduleList, targetIndex)
         if (totalDurationMinutes == null) {
-            Log.d("MapActivity updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
-            // If we already computed a final value before, do not override.
+            // Tidak perlu log verbose
             return
         }
-        Log.d("MapActivity updateApiTime", "Total duration in minutes: $totalDurationMinutes")
 
         // Add the duration (in seconds) to the start time.
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
@@ -1199,12 +1193,8 @@ class MapActivity : AppCompatActivity() {
             runOnUiThread {
                 ApiTimeValueTextView.text = updatedApiTime
             }
-            Log.d("MapActivity updateApiTime", "API Time updated to: $updatedApiTime")
-        } else {
-            Log.d("MapActivity updateApiTime", "⏩ Skipped updating API Time because upcomingStopName == firstAddress")
+            // Tidak perlu log verbose setiap detik
         }
-
-        Log.d("MapActivity updateApiTime", "API Time updated to: $updatedApiTime")
 
         // If the upcoming stop is the final scheduled stop, lock the API time.
         val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
@@ -1212,7 +1202,8 @@ class MapActivity : AppCompatActivity() {
             upcomingAddress.equals(lastScheduledAddress, ignoreCase = true)) {
             apiTimeLocked = true
             lockedApiTime = updatedApiTime
-            Log.d("MapActivity updateApiTime", "Final scheduled bus stop reached. API time locked.")
+            // Hanya log saat API time locked (ini event penting, selalu log)
+            FileLogger.d("MapActivity updateApiTime", "Final scheduled bus stop reached. API time locked: $updatedApiTime")
         }
     }
 
@@ -1408,7 +1399,6 @@ class MapActivity : AppCompatActivity() {
 
         // ─── NEW: figure out where you are on the polyline ───
         val nearestRouteIdx = mapController.findNearestBusRoutePoint(currentLat, currentLon)
-        Log.d("MapActivity checkPassedStops", "Nearest route index: $nearestRouteIdx")
 
         // ─── NEW: auto-pass any stops whose route-index ≤ your position ───
         stops.forEach { stop ->
@@ -1417,7 +1407,10 @@ class MapActivity : AppCompatActivity() {
             }
             if (idx != -1 && idx <= nearestRouteIdx && !passedStops.contains(stop)) {
                 passedStops.add(stop)
-                Log.d("MapActivity checkPassedStops", "🟢 Auto-passed stop: ${stop.address}")
+                // Hanya log saat stop benar-benar dilewati dengan throttling
+                if (lifecycleLogger.shouldLogStopPassed()) {
+                    FileLogger.d("MapActivity checkPassedStops", "🟢 Auto-passed stop: ${stop.address}")
+                }
             }
         }
 
@@ -1458,14 +1451,13 @@ class MapActivity : AppCompatActivity() {
             runOnUiThread {
                 upcomingBusStopTextView.text = "$stopAddress"
                 upcomingStop = stopAddress
-                Log.d(
-                    "MapActivity checkPassedStops",
-                    "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
-                )
-                FileLogger.d(
-                    "MapActivity checkPassedStops",
-                    "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
-                )
+                // Hanya log saat stop benar-benar dilewati dengan throttling
+                if (lifecycleLogger.shouldLogStopPassed()) {
+                    FileLogger.d(
+                        "MapActivity checkPassedStops",
+                        "✅ Nearest stop passed: $stopAddress (Distance: ${"%.2f".format(distance)} meters)"
+                    )
+                }
                 Toast.makeText(
                     this@MapActivity,
                     "✅At ${latitude} ${longitude} nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress",
@@ -1500,10 +1492,13 @@ class MapActivity : AppCompatActivity() {
                         "✅ Arrived at: $stopAddress",
                         Toast.LENGTH_LONG
                     ).show()
-                    FileLogger.d(
-                        "MapActivity checkPassedStops",
-                        "✅ Arrived at: $stopAddress"
-                    )
+                    // Log dengan throttling
+                    if (lifecycleLogger.shouldLogStopPassed()) {
+                        FileLogger.d(
+                            "MapActivity checkPassedStops",
+                            "✅ Arrived at: $stopAddress"
+                        )
+                    }
                 }
 
                 // ✅ Add this block to track and update detection zones
@@ -1573,12 +1568,7 @@ class MapActivity : AppCompatActivity() {
             runOnUiThread {
                 upcomingBusStopTextView.text = "$upcomingStopName"
                 upcomingStop = upcomingStopName
-                Log.d(
-                    "MapActivity checkPassedStops",
-                    "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${
-                        "%.2f".format(distance)
-                    } meters away at $upcomingStopName."
-                )
+                // Tidak perlu log verbose setiap detik
             }
         }
     }
@@ -1779,12 +1769,19 @@ class MapActivity : AppCompatActivity() {
                         targetPoint.longitude ?: 0.0
                     )
 
-                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
-                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
-
-//                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
-//                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
-//                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
+                    // Menghapus log GPS_DEBUG yang muncul setiap detik
+                    // Gunakan LifecycleLogger untuk location update (throttled 10 detik)
+                    val currentStop = if (currentStopIndex < stops.size) stops[currentStopIndex].address else "End of Route"
+                    val upcomingStop = if (currentStopIndex + 1 < stops.size) stops[currentStopIndex + 1].address else "End of Route"
+                    val scheduleStatus = scheduleStatusValueTextView.text.toString()
+                    
+                    lifecycleLogger.logLocationUpdate(
+                        latitude = latitude,
+                        longitude = longitude,
+                        currentStop = currentStop,
+                        upcomingStop = upcomingStop,
+                        scheduleStatus = scheduleStatus
+                    )
 
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
